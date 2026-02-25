@@ -1,11 +1,926 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hello Aske</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ACE — Spare Parts AI Agent Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0d1117;
+      --bg2:        #161b27;
+      --bg3:        #1e2538;
+      --border:     #2a3145;
+      --border2:    #3a4460;
+      --text:       #e2e8f0;
+      --text2:      #94a3b8;
+      --text3:      #64748b;
+      --blue:       #4f8ef7;
+      --blue-dim:   #1e3a6e;
+      --purple:     #818cf8;
+      --purple-dim: #2d2060;
+      --green:      #10b981;
+      --green-dim:  #064e3b;
+      --amber:      #f59e0b;
+      --amber-dim:  #78350f;
+      --red:        #f87171;
+      --red-dim:    #7f1d1d;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      font-size: 13px;
+    }
+
+    /* ── HEADER ── */
+    .hdr {
+      flex-shrink: 0;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .hdr-left { display: flex; flex-direction: column; gap: 2px; }
+    .hdr-logo {
+      font-size: 16px; font-weight: 700; color: var(--blue);
+      letter-spacing: -0.3px;
+    }
+    .hdr-sub { font-size: 11px; color: var(--text3); }
+    .hdr-right { display: flex; align-items: center; gap: 8px; }
+    .step-label { font-size: 12px; color: var(--text3); min-width: 180px; text-align: right; }
+
+    /* ── BUTTONS ── */
+    .btn {
+      padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border);
+      cursor: pointer; font-size: 12px; font-weight: 500;
+      transition: all .15s; background: var(--bg3); color: var(--text2);
+    }
+    .btn:hover { background: var(--border); color: var(--text); }
+    .btn-primary {
+      background: #1d4ed8; border-color: var(--blue); color: white;
+    }
+    .btn-primary:hover { background: #1e40af; }
+    .btn-primary.paused { background: #1e293b; border-color: var(--amber); color: var(--amber); }
+
+    /* ── STEPS BAR ── */
+    .steps-bar {
+      flex-shrink: 0;
+      display: flex; align-items: center;
+      padding: 8px 20px; gap: 0;
+      background: #0a0d14;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    .step-node {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      cursor: pointer; min-width: 60px;
+    }
+    .step-node:hover .step-dot { border-color: var(--blue); }
+    .step-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--bg3); border: 1.5px solid var(--border2);
+      transition: all .3s;
+    }
+    .step-dot.done  { background: #1d4ed8; border-color: var(--blue); }
+    .step-dot.curr  { background: var(--blue); border-color: #93c5fd; box-shadow: 0 0 8px var(--blue); }
+    .step-name { font-size: 9px; color: var(--text3); text-align: center; line-height: 1.2; }
+    .step-name.curr { color: var(--blue); }
+    .step-connector { flex: 1; height: 1.5px; background: var(--border); min-width: 6px; }
+    .step-connector.done { background: #1d4ed8; }
+
+    /* ── MAIN SPLIT ── */
+    .main {
+      flex: 1; display: grid;
+      grid-template-columns: 42% 58%;
+      overflow: hidden;
+    }
+
+    /* ── ARCH PANEL ── */
+    .arch-panel {
+      background: var(--bg);
+      border-right: 1px solid var(--border);
+      padding: 14px 14px 14px 14px;
+      overflow-y: auto;
+      display: flex; flex-direction: column; gap: 0;
+    }
+    .arch-section-label {
+      font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--text3); margin-bottom: 6px; padding-left: 2px;
+    }
+    .arch-nodes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+
+    .arch-node {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 7px 10px;
+      font-size: 11px; color: var(--text3);
+      transition: all .35s ease;
+      cursor: default; user-select: none;
+    }
+    .arch-node .node-icon { font-size: 13px; line-height: 1; }
+    .arch-node .node-label { font-weight: 500; }
+
+    /* active states by layer */
+    .arch-node.active-blue {
+      background: var(--blue-dim); border-color: var(--blue);
+      color: #93c5fd;
+      box-shadow: 0 0 12px rgba(79,142,247,.35);
+      animation: glowBlue 1.8s ease-in-out infinite;
+    }
+    .arch-node.active-purple {
+      background: var(--purple-dim); border-color: var(--purple);
+      color: #c7d2fe;
+      box-shadow: 0 0 12px rgba(129,140,248,.4);
+      animation: glowPurple 1.8s ease-in-out infinite;
+    }
+    .arch-node.active-amber {
+      background: var(--amber-dim); border-color: var(--amber);
+      color: #fde68a;
+      box-shadow: 0 0 12px rgba(245,158,11,.4);
+      animation: glowAmber 1.8s ease-in-out infinite;
+    }
+    .arch-node.active-green {
+      background: var(--green-dim); border-color: var(--green);
+      color: #6ee7b7;
+      box-shadow: 0 0 12px rgba(16,185,129,.35);
+      animation: glowGreen 1.8s ease-in-out infinite;
+    }
+
+    @keyframes glowBlue   { 0%,100%{box-shadow:0 0 8px rgba(79,142,247,.35)} 50%{box-shadow:0 0 20px rgba(79,142,247,.7)} }
+    @keyframes glowPurple { 0%,100%{box-shadow:0 0 8px rgba(129,140,248,.4)} 50%{box-shadow:0 0 20px rgba(129,140,248,.8)} }
+    @keyframes glowAmber  { 0%,100%{box-shadow:0 0 8px rgba(245,158,11,.4)}  50%{box-shadow:0 0 20px rgba(245,158,11,.8)} }
+    @keyframes glowGreen  { 0%,100%{box-shadow:0 0 8px rgba(16,185,129,.35)} 50%{box-shadow:0 0 20px rgba(16,185,129,.7)} }
+
+    /* connectors in arch */
+    .arch-connector {
+      display: flex; justify-content: center; align-items: center;
+      padding: 3px 0; color: var(--border2); font-size: 14px;
+    }
+    .arch-divider {
+      border: none; border-top: 1px dashed var(--border);
+      margin: 8px 0;
+    }
+
+    /* ── UI PANEL ── */
+    .ui-panel {
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .ui-content {
+      flex: 1; overflow-y: auto; padding: 16px;
+    }
+    .ui-content > * { animation: fadeUp .4s ease; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── LOG PANEL ── */
+    .log-panel {
+      flex-shrink: 0;
+      height: 155px;
+      background: #070a10;
+      border-top: 1px solid var(--border);
+      padding: 8px 14px;
+      overflow-y: auto;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+      font-size: 11px;
+    }
+    .log-hdr { color: var(--text3); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+    .log-entry { margin-bottom: 3px; line-height: 1.5; }
+    .log-ts   { color: #334155; }
+    .log-sys  { color: var(--text3); }
+    .log-tool { color: var(--blue); }
+    .log-res  { color: var(--green); }
+    .log-think{ color: #a78bfa; }
+
+    /* ── EMAIL CARD ── */
+    .email-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden;
+    }
+    .email-topbar {
+      background: #0e1320; padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .email-badge {
+      display: inline-block;
+      background: var(--red-dim); color: var(--red);
+      border: 1px solid var(--red); border-radius: 4px;
+      padding: 2px 8px; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px;
+    }
+    .email-subject { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+    .email-meta { display: grid; grid-template-columns: 70px 1fr; gap: 3px 8px; }
+    .em-k { color: var(--text3); }
+    .em-v { color: var(--text2); }
+    .email-body { padding: 14px; color: var(--text2); line-height: 1.75; }
+    .email-body p { margin-bottom: 10px; }
+    .email-ts { float: right; font-size: 11px; color: var(--text3); margin-top: -2px; }
+    .hl { color: var(--text); font-weight: 600; }
+
+    /* ── TICKET CARD ── */
+    .ticket-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px; margin-bottom: 10px;
+    }
+    .ticket-id { font-family: monospace; color: var(--blue); font-size: 12px; margin-bottom: 6px; }
+    .ticket-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 12px; }
+    .ticket-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .ticket-cell {
+      background: var(--bg); border-radius: 6px; padding: 8px;
+      border: 1px solid var(--border);
+    }
+    .tc-key { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text3); margin-bottom: 3px; }
+    .tc-val { font-size: 12px; font-weight: 600; color: var(--text); }
+    .badge-aog { background: var(--red-dim); color: var(--red); border: 1px solid var(--red); border-radius: 3px; padding: 1px 6px; font-size: 11px; }
+
+    /* ── REASONING BOX ── */
+    .reasoning-box {
+      background: #100d20; border: 1px solid #3730a3;
+      border-radius: 8px; padding: 12px 14px; margin-bottom: 10px;
+    }
+    .reasoning-hdr {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--purple); margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .reasoning-hdr::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--purple); display: block; animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .reasoning-text { color: #a5b4fc; line-height: 1.75; font-style: italic; }
+
+    /* ── TOOL RESULT ── */
+    .tool-result {
+      background: var(--bg); border: 1px solid var(--border);
+      border-left: 3px solid var(--blue);
+      border-radius: 8px; padding: 11px 14px; margin-bottom: 10px;
+    }
+    .tool-result.purple { border-left-color: var(--purple); }
+    .tool-result.amber  { border-left-color: var(--amber);  }
+    .tool-result.green  { border-left-color: var(--green);  }
+    .tr-hdr {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--blue); margin-bottom: 9px; font-weight: 700;
+    }
+    .tr-hdr.purple { color: var(--purple); }
+    .tr-hdr.amber  { color: var(--amber);  }
+    .tr-hdr.green  { color: var(--green);  }
+    .tr-row {
+      display: flex; justify-content: space-between;
+      padding: 5px 0; border-bottom: 1px solid var(--border);
+    }
+    .tr-row:last-child { border-bottom: none; }
+    .tr-k { color: var(--text3); }
+    .tr-v { color: var(--text); font-weight: 500; text-align: right; }
+    .tr-v.g { color: var(--green); }
+    .tr-v.a { color: var(--amber); }
+    .tr-v.r { color: var(--red);   }
+
+    /* ── HUMAN REVIEW ── */
+    .human-card {
+      background: var(--bg2); border: 1px solid var(--amber);
+      border-radius: 10px; padding: 14px;
+    }
+    .human-hdr { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .human-avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--amber), #d97706);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 13px; color: #fff; flex-shrink: 0;
+    }
+    .human-name { font-weight: 700; color: var(--text); font-size: 14px; }
+    .human-role { color: var(--amber); font-size: 11px; margin-top: 1px; }
+    .review-notice {
+      background: #1c1409; border: 1px solid #92400e;
+      border-radius: 6px; padding: 9px 12px;
+      color: #fcd34d; font-size: 12px; margin-bottom: 12px;
+    }
+    .draft-preview {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 14px; margin-bottom: 12px;
+      color: var(--text2); line-height: 1.7;
+    }
+    .draft-preview p { margin-bottom: 8px; font-size: 12px; }
+    .confidence-bar { font-size: 11px; color: var(--text3); margin-bottom: 12px; }
+    .review-btns { display: flex; gap: 8px; }
+    .btn-approve {
+      background: var(--green-dim); color: #6ee7b7;
+      border: 1px solid var(--green);
+      padding: 8px 18px; border-radius: 7px;
+      font-size: 13px; font-weight: 700; cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-approve:hover { background: #065f46; }
+    .btn-minor {
+      background: var(--bg3); color: var(--text2);
+      border: 1px solid var(--border);
+      padding: 8px 14px; border-radius: 7px;
+      font-size: 12px; cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-minor:hover { background: var(--border); }
+
+    /* ── SUCCESS CARD ── */
+    .success-card {
+      background: var(--green-dim); border: 1px solid var(--green);
+      border-radius: 12px; padding: 28px; text-align: center; margin-bottom: 12px;
+    }
+    .success-icon { font-size: 44px; margin-bottom: 12px; }
+    .success-title { font-size: 20px; font-weight: 800; color: #6ee7b7; margin-bottom: 6px; }
+    .success-sub { color: var(--text2); font-size: 13px; }
+
+    /* ── PLACEHOLDER ── */
+    .placeholder {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100%; text-align: center; color: var(--text3); gap: 12px;
+      padding: 40px;
+    }
+    .placeholder-icon { font-size: 50px; opacity: .5; }
+    .placeholder-title { font-size: 16px; font-weight: 600; color: var(--text2); }
+    .placeholder-sub { font-size: 13px; }
+
+    /* ── MISC ── */
+    .section-title {
+      font-size: 12px; font-weight: 600; color: var(--text2);
+      margin-bottom: 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      display: inline-block;
+    }
+    .sd-blue   { background: var(--blue);   box-shadow: 0 0 6px var(--blue);   }
+    .sd-purple { background: var(--purple); box-shadow: 0 0 6px var(--purple); }
+    .sd-amber  { background: var(--amber);  box-shadow: 0 0 6px var(--amber);  }
+    .sd-green  { background: var(--green);  box-shadow: 0 0 6px var(--green);  }
+  </style>
 </head>
 <body>
-    <h1>Hello Aske</h1>
+
+<!-- ═══════════════════ HEADER ═══════════════════ -->
+<div class="hdr">
+  <div class="hdr-left">
+    <div class="hdr-logo">ACE — AI Agent Demo</div>
+    <div class="hdr-sub">Spare Parts Ticket Processing · Satair Group</div>
+  </div>
+  <div class="hdr-right">
+    <span class="step-label" id="stepLabel">Ready to run</span>
+    <button class="btn" onclick="prevStep()">← Prev</button>
+    <button class="btn btn-primary" id="runBtn" onclick="toggleRun()">▶ Run Demo</button>
+    <button class="btn" onclick="nextStep()">Next →</button>
+    <button class="btn" onclick="resetDemo()">↺ Reset</button>
+  </div>
+</div>
+
+<!-- ═══════════════════ STEPS BAR ═══════════════════ -->
+<div class="steps-bar" id="stepsBar"></div>
+
+<!-- ═══════════════════ MAIN ═══════════════════ -->
+<div class="main">
+
+  <!-- LEFT: ARCHITECTURE -->
+  <div class="arch-panel">
+
+    <!-- Layer 1: Inputs -->
+    <div class="arch-section-label">Inputs &amp; Touchpoints</div>
+    <div class="arch-nodes">
+      <div class="arch-node" id="n-email"><span class="node-icon">📧</span><span class="node-label">Email Intake</span></div>
+      <div class="arch-node" id="n-portal"><span class="node-icon">🌐</span><span class="node-label">Self-Service Portal</span></div>
+      <div class="arch-node" id="n-satair"><span class="node-icon">🛒</span><span class="node-label">Satair Market</span></div>
+    </div>
+
+    <div class="arch-connector">↓</div>
+    <hr class="arch-divider" />
+
+    <!-- Layer 2: Orchestration -->
+    <div class="arch-section-label">AI Orchestration</div>
+    <div class="arch-nodes">
+      <div class="arch-node" id="n-orch"><span class="node-icon">⚙️</span><span class="node-label">ACE AI Orchestrator</span></div>
+      <div class="arch-node" id="n-llm"><span class="node-icon">🧠</span><span class="node-label">LLM Service</span></div>
+      <div class="arch-node" id="n-session"><span class="node-icon">🔁</span><span class="node-label">Session Manager</span></div>
+    </div>
+
+    <div class="arch-connector">↓</div>
+    <hr class="arch-divider" />
+
+    <!-- Layer 3: Tools -->
+    <div class="arch-section-label">Agent Tools</div>
+    <div class="arch-nodes">
+      <div class="arch-node" id="n-ticket-tool"><span class="node-icon">🎫</span><span class="node-label">Ticket Tool</span></div>
+      <div class="arch-node" id="n-sap-tool"><span class="node-icon">🔍</span><span class="node-label">SAP Lookup</span></div>
+      <div class="arch-node" id="n-knowledge-tool"><span class="node-icon">📚</span><span class="node-label">Knowledge Tool</span></div>
+      <div class="arch-node" id="n-history-tool"><span class="node-icon">🕐</span><span class="node-label">Case History</span></div>
+      <div class="arch-node" id="n-draft-tool"><span class="node-icon">✍️</span><span class="node-label">Response Draft</span></div>
+    </div>
+
+    <div class="arch-connector">↓</div>
+    <hr class="arch-divider" />
+
+    <!-- Layer 4: Human -->
+    <div class="arch-section-label">Human in the Loop</div>
+    <div class="arch-nodes">
+      <div class="arch-node" id="n-human"><span class="node-icon">👤</span><span class="node-label">Human Agent Review</span></div>
+    </div>
+
+    <div class="arch-connector">↓</div>
+    <hr class="arch-divider" />
+
+    <!-- Layer 5: Core Systems -->
+    <div class="arch-section-label">Core Systems</div>
+    <div class="arch-nodes">
+      <div class="arch-node" id="n-freshdesk"><span class="node-icon">💼</span><span class="node-label">Freshdesk</span></div>
+      <div class="arch-node" id="n-sap-rpr"><span class="node-icon">⚙️</span><span class="node-label">SAP-RPR</span></div>
+      <div class="arch-node" id="n-sap-ap1"><span class="node-icon">⚙️</span><span class="node-label">SAP-AP1</span></div>
+      <div class="arch-node" id="n-symbio"><span class="node-icon">📄</span><span class="node-label">Symbio</span></div>
+      <div class="arch-node" id="n-lilly"><span class="node-icon">🔗</span><span class="node-label">LILLY</span></div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT: UI + LOG -->
+  <div class="ui-panel">
+    <div class="ui-content" id="uiContent">
+      <div class="placeholder">
+        <div class="placeholder-icon">▶</div>
+        <div class="placeholder-title">Click "Run Demo" to begin</div>
+        <div class="placeholder-sub">Scenario: AOG spare parts request from Lufthansa Technik</div>
+      </div>
+    </div>
+
+    <div class="log-panel" id="logPanel">
+      <div class="log-hdr">Agent Activity Log</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════
+const EMAIL_BODY = `
+<div class="email-card">
+  <div class="email-topbar">
+    <div>
+      <span class="email-badge">⚠ AOG — Aircraft on Ground</span>
+      <span class="email-ts">Wed, 26 Feb 2025 · 07:43 CET</span>
+    </div>
+    <div class="email-subject">URGENT: AOG — Airbus A320 Hydraulic Pump Part #HYD-A320-2847</div>
+    <div class="email-meta">
+      <span class="em-k">From:</span><span class="em-v">Jonas.Mueller@lufthansa-technik.com</span>
+      <span class="em-k">To:</span><span class="em-v">spareparts@satair.com</span>
+      <span class="em-k">CC:</span><span class="em-v">moc@lufthansa-technik.com</span>
+    </div>
+  </div>
+  <div class="email-body">
+    <p>Dear Satair Spare Parts Team,</p>
+    <p>We have an <span class="hl">Aircraft on Ground (AOG)</span> situation at <span class="hl">Hamburg Airport (HAM)</span>. Tail number <span class="hl">D-AIBL</span>, an Airbus A320-214, is grounded due to a failed hydraulic pump (Part No. <span class="hl">HYD-A320-2847</span>, ATA Chapter 29).</p>
+    <p>We urgently require <span class="hl">1 unit</span> of the above part. Please confirm stock availability and earliest delivery time to HAM immediately. AOG priority shipping required.</p>
+    <p>
+      AOG reference: <span class="hl">LHT-AOG-2025-0892</span><br/>
+      Work Order: <span class="hl">WO-HAM-447821</span>
+    </p>
+    <p>We are a Satair <span class="hl">Platinum</span> account. SLA requires 4-hour response.</p>
+    <p>Best regards,<br/>
+    <span class="hl">Jonas Müller</span><br/>
+    AOG Desk — Line Maintenance<br/>
+    Lufthansa Technik AG, Hamburg · +49 40 5070-12345</p>
+  </div>
+</div>`;
+
+// ══════════════════════════════════════════════════
+//  STEPS
+// ══════════════════════════════════════════════════
+const STEPS = [
+  {
+    label: 'Email In',
+    nodes: { blue: ['n-email'] },
+    ui() { return `
+      <div class="section-title"><span class="status-dot sd-blue"></span>Incoming email detected</div>
+      ${EMAIL_BODY}
+    `; },
+    logs: [
+      { t: 'sys',   m: 'New email received · jonas.mueller@lufthansa-technik.com' },
+      { t: 'sys',   m: 'Subject: URGENT: AOG — Airbus A320 Hydraulic Pump Part #HYD-A320-2847' },
+      { t: 'think', m: 'Parsing email content… AOG keyword detected in subject line. Routing to ACE orchestrator.' },
+    ]
+  },
+  {
+    label: 'Ticket Created',
+    nodes: { blue: ['n-orch', 'n-session', 'n-ticket-tool', 'n-freshdesk'] },
+    ui() { return `
+      <div class="section-title"><span class="status-dot sd-blue"></span>Ticket created in Freshdesk</div>
+      <div class="ticket-card">
+        <div class="ticket-id">🎫 #LHT-20240847 · Freshdesk</div>
+        <div class="ticket-title">AOG — A320 Hydraulic Pump HYD-A320-2847 · Hamburg</div>
+        <div class="ticket-grid">
+          <div class="ticket-cell"><div class="tc-key">Priority</div><div class="tc-val"><span class="badge-aog">AOG — Critical</span></div></div>
+          <div class="ticket-cell"><div class="tc-key">Customer</div><div class="tc-val">Lufthansa Technik AG</div></div>
+          <div class="ticket-cell"><div class="tc-key">Assigned To</div><div class="tc-val">ACE AI Agent</div></div>
+          <div class="ticket-cell"><div class="tc-key">SLA Deadline</div><div class="tc-val" style="color:var(--amber)">4h · 11:43 CET</div></div>
+          <div class="ticket-cell"><div class="tc-key">Category</div><div class="tc-val">AOG Parts Request</div></div>
+          <div class="ticket-cell"><div class="tc-key">Status</div><div class="tc-val" style="color:var(--green)">Open</div></div>
+        </div>
+      </div>
+    `; },
+    logs: [
+      { t: 'tool', m: "create_ticket(customer='Lufthansa Technik AG', priority='AOG', subject='AOG - A320 Hydraulic Pump HYD-A320-2847')" },
+      { t: 'res',  m: "→ Ticket #LHT-20240847 created in Freshdesk | SLA: 4h | Assigned: ACE AI Agent" },
+      { t: 'think',m: 'Ticket open. Beginning automated processing pipeline.' },
+    ]
+  },
+  {
+    label: 'AI Analysis',
+    nodes: { purple: ['n-orch', 'n-llm'] },
+    ui() { return `
+      <div class="section-title"><span class="status-dot sd-purple"></span>Orchestrator analysing request</div>
+      <div class="reasoning-box">
+        <div class="reasoning-hdr">LLM Reasoning</div>
+        <div class="reasoning-text">
+          Email is from Lufthansa Technik AG — a Platinum-tier customer. AOG declared at Hamburg Airport for tail D-AIBL (A320-214). Required part: HYD-A320-2847 (hydraulic pump, ATA 29), quantity 1. This is the highest urgency class — SLA: 4-hour response. Plan: (1) verify inventory at HAM-area warehouses via SAP, (2) confirm customer account standing and order history, (3) retrieve AOG handling policy from knowledge base, (4) generate accurate response with stock confirmation and ETA.
+        </div>
+      </div>
+      <div class="tool-result purple">
+        <div class="tr-hdr purple">📋 Extracted Entities</div>
+        <div class="tr-row"><span class="tr-k">Part Number</span><span class="tr-v">HYD-A320-2847</span></div>
+        <div class="tr-row"><span class="tr-k">ATA Chapter</span><span class="tr-v">29 — Hydraulic Power</span></div>
+        <div class="tr-row"><span class="tr-k">Quantity Required</span><span class="tr-v">1 unit</span></div>
+        <div class="tr-row"><span class="tr-k">Delivery Location</span><span class="tr-v">Hamburg Airport (HAM)</span></div>
+        <div class="tr-row"><span class="tr-k">Customer AOG Ref</span><span class="tr-v">LHT-AOG-2025-0892</span></div>
+        <div class="tr-row"><span class="tr-k">Urgency Level</span><span class="tr-v r">AOG — Critical</span></div>
+      </div>
+    `; },
+    logs: [
+      { t: 'think', m: 'Classifying request: AOG detected. Part HYD-A320-2847, qty 1, ATA 29, location HAM.' },
+      { t: 'tool',  m: "extract_entities(email_id='LHT-20240847')" },
+      { t: 'res',   m: "→ part_no=HYD-A320-2847 | qty=1 | location=HAM | urgency=AOG | ata=29" },
+      { t: 'think', m: 'Entities confirmed. Planning tool calls: SAP lookup → customer history → knowledge base → draft response.' },
+    ]
+  },
+  {
+    label: 'SAP Lookup',
+    nodes: { blue: ['n-orch', 'n-sap-tool', 'n-sap-rpr', 'n-sap-ap1'] },
+    ui() { return `
+      <div class="section-title"><span class="status-dot sd-blue"></span>SAP inventory lookup</div>
+      <div class="tool-result">
+        <div class="tr-hdr">🔍 SAP Lookup · Part HYD-A320-2847</div>
+        <div class="tr-row"><span class="tr-k">Description</span><span class="tr-v">Hydraulic Pump Assembly — A320 Series</span></div>
+        <div class="tr-row"><span class="tr-k">OEM / Manufacturer</span><span class="tr-v">Parker Hannifin (OEM)</span></div>
+        <div class="tr-row"><span class="tr-k">Condition</span><span class="tr-v g">Serviceable — New</span></div>
+        <div class="tr-row"><span class="tr-k">HAM Warehouse Stock</span><span class="tr-v g">✓ 2 units available</span></div>
+        <div class="tr-row"><span class="tr-k">CPH Warehouse Stock</span><span class="tr-v">4 units (backup)</span></div>
+        <div class="tr-row"><span class="tr-k">List Unit Price</span><span class="tr-v">€ 4,847.00</span></div>
+        <div class="tr-row"><span class="tr-k">EASA Form 1</span><span class="tr-v g">✓ Available</span></div>
+        <div class="tr-row"><span class="tr-k">AOG Delivery to HAM</span><span class="tr-v g">Same day · within 3 hours</span></div>
+        <div class="tr-row"><span class="tr-k">Export / Customs</span><span class="tr-v g">✓ No restrictions (EU → EU)</span></div>
+      </div>
+    `; },
+    logs: [
+      { t: 'tool', m: "sap_lookup(part_id='HYD-A320-2847', warehouse='HAM', check_nearby=True)" },
+      { t: 'res',  m: "→ HAM: 2 units (serviceable/new) | EASA Form 1: yes | Price: €4,847.00" },
+      { t: 'res',  m: "→ AOG delivery ETA: same day, 3h | No export restrictions (EU-EU)" },
+      { t: 'think',m: 'Stock confirmed at HAM. AOG delivery feasible. Moving to customer account check.' },
+    ]
+  },
+  {
+    label: 'Customer History',
+    nodes: { blue: ['n-orch', 'n-history-tool', 'n-freshdesk', 'n-lilly'] },
+    ui() { return `
+      <div class="section-title"><span class="status-dot sd-blue"></span>Customer account &amp; order history</div>
+      <div class="tool-result">
+        <div class="tr-hdr">🕐 Case History · Lufthansa Technik AG (LHT-DE-001)</div>
+        <div class="tr-row"><span class="tr-k">Account Tier</span><span class="tr-v a">⭐ Platinum</span></div>
+        <div class="tr-row"><span class="tr-k">Account Since</span><span class="tr-v">2009</span></div>
+        <div class="tr-row"><span class="tr-k">Orders (12 months)</span><span class="tr-v">47 orders</span></div>
+        <div class="tr-row"><span class="tr-k">Revenue (12 months)</span><span class="tr-v">€ 2,340,000</span></div>
+        <div class="tr-row"><span class="tr-k">Payment Status</span><span class="tr-v g">✓ Current — Net 30</span></div>
+        <div class="tr-row"><span class="tr-k">Credit Limit</span><span class="tr-v g">✓ Within limit</span></div>
+        <div class="tr-row"><span class="tr-k">Previous AOG Cases</span><span class="tr-v">8 total — all resolved &lt; 4 h</span></div>
+        <div class="tr-row"><span class="tr-k">Preferred Courier</span><span class="tr-v">DHL Aviation Express</span></div>
+        <div class="tr-row"><span class="tr-k">Account Manager</span><span class="tr-v">Erik Hansen</span></div>
+      </div>
+    `; },
+    logs: [
+      { t: 'tool',  m: "get_case_history(customer_id='LHT-DE-001', lookback_months=12)" },
+      { t: 'res',   m: "→ Tier: Platinum | Orders: 47 | Revenue: €2.34M | Credit: OK | AOG history: 8 cases" },
+      { t: 'think', m: 'Platinum customer. Excellent payment history. Preferred courier: DHL Aviation Express. No credit blockers. Proceeding to knowledge base.' },
+    ]
+  },
+  {
+    label: 'Knowledge Base',
+    nodes: { blue: ['n-orch', 'n-knowledge-tool', 'n-symbio'] },
+    ui() { return `
+      <div class="section-title"><span class="status-dot sd-blue"></span>Knowledge base lookup</div>
+      <div class="tool-result">
+        <div class="tr-hdr">📚 Knowledge Base · AOG Policy &amp; Pricing Rules</div>
+        <div class="tr-row"><span class="tr-k">SOP Document</span><span class="tr-v g">✓ SOP-AOG-2024-v3 matched</span></div>
+        <div class="tr-row"><span class="tr-k">Platinum SLA</span><span class="tr-v a">4 h response / same-day delivery</span></div>
+        <div class="tr-row"><span class="tr-k">Platinum Discount</span><span class="tr-v">8% off list price</span></div>
+        <div class="tr-row"><span class="tr-k">AOG Freight Policy</span><span class="tr-v g">Satair covers AOG freight cost</span></div>
+        <div class="tr-row"><span class="tr-k">Core Exchange</span><span class="tr-v">Unserviceable core return within 30 days</span></div>
+        <div class="tr-row"><span class="tr-k">Export Compliance</span><span class="tr-v g">✓ No EAR/ITAR restrictions on part</span></div>
+        <div class="tr-row"><span class="tr-k">Required Docs</span><span class="tr-v">EASA Form 1, C of C, PO from customer</span></div>
+      </div>
+    `; },
+    logs: [
+      { t: 'tool',  m: "knowledge_search(query='AOG handling procedure hydraulic pump A320 platinum', source='Symbio')" },
+      { t: 'res',   m: "→ SOP-AOG-2024-v3 | SLA: 4h | Platinum disc: 8% | AOG freight: Satair-covered" },
+      { t: 'res',   m: "→ Core return: 30 days | No export restrictions" },
+      { t: 'think', m: 'Policy retrieved. Applying 8% discount: €4,459.24. Freight: Satair-covered. All data ready — generating draft.' },
+    ]
+  },
+  {
+    label: 'Draft Response',
+    nodes: { purple: ['n-orch', 'n-llm', 'n-draft-tool'] },
+    ui() { return `
+      <div class="section-title"><span class="status-dot sd-purple"></span>Generating response draft</div>
+      <div class="reasoning-box">
+        <div class="reasoning-hdr">LLM Reasoning</div>
+        <div class="reasoning-text">
+          All data verified. Stock confirmed at HAM (2 units). Price after 8% Platinum discount: €4,459.24. Freight: covered by Satair per SLA. Delivery: within 3 hours via DHL Aviation Express. I'll generate a clear, concise AOG response covering: part confirmation, condition, price, ETA, freight coverage, and core return requirement. Must request PO before releasing stock.
+        </div>
+      </div>
+      <div class="tool-result purple">
+        <div class="tr-hdr purple">✍️ Draft Response · Ticket #LHT-20240847</div>
+        <div class="draft-preview" style="margin-top:8px;margin-bottom:0">
+          <p><strong style="color:var(--text)">To:</strong> Jonas.Mueller@lufthansa-technik.com</p>
+          <p><strong style="color:var(--text)">Subject:</strong> RE: URGENT AOG — A320 Hydraulic Pump HYD-A320-2847 [#LHT-20240847]</p>
+          <hr style="border:none;border-top:1px solid var(--border);margin:8px 0"/>
+          <p>Dear Mr. Müller,</p>
+          <p>Thank you for your AOG notification (Ref: LHT-AOG-2025-0892). We can confirm the following:</p>
+          <p>
+            ✅ <strong style="color:var(--text)">Part HYD-A320-2847</strong> — 1 unit available at Hamburg warehouse<br/>
+            ✅ Condition: Serviceable (New) · EASA Form 1 included<br/>
+            ✅ Delivery to HAM: <strong style="color:var(--green)">within 3 hours</strong> · DHL Aviation Express<br/>
+            ✅ Price: <strong style="color:var(--text)">€ 4,459.24</strong> (Platinum 8% discount applied)<br/>
+            ✅ AOG freight: <strong style="color:var(--text)">Satair-covered</strong> per your SLA
+          </p>
+          <p>Please confirm purchase order to release the part. Unserviceable core return required within 30 days.</p>
+          <p>Best regards,<br/><em style="color:var(--text3)">[Pending human review — Sarah Weiss, Senior Parts Specialist]</em></p>
+        </div>
+      </div>
+    `; },
+    logs: [
+      { t: 'tool',  m: "draft_response(ticket='LHT-20240847', template='aog_platinum', stock=True, eta_h=3, discount_pct=8)" },
+      { t: 'res',   m: "→ Draft generated | Price: €4,459.24 | Delivery: 3h | Freight: Satair-covered | Docs: EASA Form 1" },
+      { t: 'think', m: 'Draft complete. Confidence: high (97%). Routing to human agent for mandatory AOG review before sending.' },
+    ]
+  },
+  {
+    label: 'Human Review',
+    nodes: { amber: ['n-human'] },
+    ui() { return `
+      <div class="section-title"><span class="status-dot sd-amber"></span>Awaiting human agent review</div>
+      <div class="human-card">
+        <div class="human-hdr">
+          <div class="human-avatar">SW</div>
+          <div>
+            <div class="human-name">Sarah Weiss</div>
+            <div class="human-role">Senior Parts Specialist · AOG Desk</div>
+          </div>
+        </div>
+        <div class="review-notice">
+          ⚡ ACE AI has prepared a response for <strong>#LHT-20240847</strong> (AOG priority). All data verified against SAP, customer history and policy. Please review and approve before sending.
+        </div>
+        <div class="draft-preview">
+          <p><strong style="color:var(--text)">To:</strong> Jonas.Mueller@lufthansa-technik.com</p>
+          <hr style="border:none;border-top:1px solid var(--border);margin:6px 0"/>
+          <p>Dear Mr. Müller — part <strong style="color:var(--text)">HYD-A320-2847</strong> (1 unit, serviceable/new, EASA Form 1) confirmed at Hamburg warehouse. Delivery to HAM within <strong style="color:var(--green)">3 hours</strong> via DHL Aviation Express. Price: <strong style="color:var(--text)">€ 4,459.24</strong> (8% Platinum discount). AOG freight Satair-covered. Core return required within 30 days. Please confirm PO to release.</p>
+        </div>
+        <div class="confidence-bar">
+          AI Confidence: <strong style="color:var(--green)">97%</strong> &nbsp;·&nbsp;
+          SAP verified ✓ &nbsp;·&nbsp; Policy verified ✓ &nbsp;·&nbsp; Customer history ✓
+        </div>
+        <div class="review-btns">
+          <button class="btn-approve" onclick="nextStep()">✓ Approve &amp; Send</button>
+          <button class="btn-minor">✎ Edit Draft</button>
+          <button class="btn-minor">↗ Escalate</button>
+        </div>
+      </div>
+    `; },
+    logs: [
+      { t: 'sys',   m: 'Routing ticket #LHT-20240847 to human review queue (AOG policy: mandatory review).' },
+      { t: 'sys',   m: 'Assigned to: Sarah Weiss · Senior Parts Specialist · AOG Desk' },
+      { t: 'think', m: 'Awaiting human approval. Draft confidence 97%. All sources verified.' },
+    ]
+  },
+  {
+    label: 'Resolved',
+    nodes: { green: ['n-human', 'n-orch', 'n-ticket-tool', 'n-freshdesk'] },
+    ui() { return `
+      <div class="success-card">
+        <div class="success-icon">✅</div>
+        <div class="success-title">Response Approved &amp; Sent</div>
+        <div class="success-sub">Sarah Weiss approved the AI draft — email delivered to customer in under 5 minutes</div>
+      </div>
+      <div class="tool-result green">
+        <div class="tr-hdr green">📊 Ticket #LHT-20240847 — Resolution Summary</div>
+        <div class="tr-row"><span class="tr-k">Ticket Status</span><span class="tr-v g">✓ Resolved (pending PO)</span></div>
+        <div class="tr-row"><span class="tr-k">Total Response Time</span><span class="tr-v g">4 min 38 sec</span></div>
+        <div class="tr-row"><span class="tr-k">SLA Status</span><span class="tr-v g">✓ Met (budget: 4 h)</span></div>
+        <div class="tr-row"><span class="tr-k">Part Reserved</span><span class="tr-v">HYD-A320-2847 × 1 (HAM warehouse)</span></div>
+        <div class="tr-row"><span class="tr-k">Delivery Scheduled</span><span class="tr-v">Today · 11:00 CET · DHL Aviation</span></div>
+        <div class="tr-row"><span class="tr-k">Invoice Amount</span><span class="tr-v">€ 4,459.24 (freight: € 0.00)</span></div>
+        <div class="tr-row"><span class="tr-k">Human Review</span><span class="tr-v">Sarah Weiss (approved)</span></div>
+        <div class="tr-row"><span class="tr-k">AI Tool Calls</span><span class="tr-v">6 calls · 0 errors</span></div>
+      </div>
+    `; },
+    logs: [
+      { t: 'sys',  m: 'Human approval received · Sarah Weiss · 07:48:11 CET' },
+      { t: 'tool', m: "send_email(ticket='LHT-20240847', to='jonas.mueller@lufthansa-technik.com')" },
+      { t: 'res',  m: "→ Email sent | Delivery confirmation pending" },
+      { t: 'tool', m: "reserve_stock(part='HYD-A320-2847', qty=1, warehouse='HAM', ticket='LHT-20240847')" },
+      { t: 'res',  m: "→ Stock reserved | Delivery: Today 11:00 CET via DHL Aviation Express" },
+      { t: 'tool', m: "update_ticket(id='LHT-20240847', status='pending_PO', resolution='AOG_resolved')" },
+      { t: 'res',  m: "→ Ticket closed | Response time: 4m 38s | SLA: Met ✓" },
+    ]
+  },
+];
+
+// ══════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════
+let current = -1;
+let running = false;
+let timer = null;
+
+// ══════════════════════════════════════════════════
+//  STEPS BAR
+// ══════════════════════════════════════════════════
+function buildStepsBar() {
+  const bar = document.getElementById('stepsBar');
+  bar.innerHTML = STEPS.map((s, i) => `
+    ${i > 0 ? `<div class="step-connector" id="conn-${i}"></div>` : ''}
+    <div class="step-node" onclick="jumpTo(${i})">
+      <div class="step-dot" id="dot-${i}"></div>
+      <div class="step-name" id="sname-${i}">${s.label}</div>
+    </div>
+  `).join('');
+}
+
+function updateStepsBar() {
+  STEPS.forEach((_, i) => {
+    const dot  = document.getElementById(`dot-${i}`);
+    const name = document.getElementById(`sname-${i}`);
+    const conn = document.getElementById(`conn-${i}`);
+    dot.className  = 'step-dot' + (i < current ? ' done' : i === current ? ' curr' : '');
+    name.className = 'step-name' + (i === current ? ' curr' : '');
+    if (conn) conn.className = 'step-connector' + (i <= current ? ' done' : '');
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  ARCHITECTURE HIGHLIGHTS
+// ══════════════════════════════════════════════════
+const ALL_NODES = [
+  'n-email','n-portal','n-satair',
+  'n-orch','n-llm','n-session',
+  'n-ticket-tool','n-sap-tool','n-knowledge-tool','n-history-tool','n-draft-tool',
+  'n-human',
+  'n-freshdesk','n-sap-rpr','n-sap-ap1','n-symbio','n-lilly'
+];
+
+function highlightNodes(nodeMap) {
+  ALL_NODES.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.className = 'arch-node';
+  });
+  if (!nodeMap) return;
+  Object.entries(nodeMap).forEach(([color, ids]) => {
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add(`active-${color}`);
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  LOGGING
+// ══════════════════════════════════════════════════
+function addLogs(entries) {
+  const panel = document.getElementById('logPanel');
+  const now = new Date();
+  const ts = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+  entries.forEach(e => {
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    const labels = { sys: 'SYSTEM', tool: 'TOOL CALL', res: 'RESULT', think: 'REASONING' };
+    const classes = { sys: 'log-sys', tool: 'log-tool', res: 'log-res', think: 'log-think' };
+    div.innerHTML = `<span class="log-ts">[${ts}]</span> <span class="${classes[e.t] || 'log-sys'}">${labels[e.t] || 'INFO'}</span>  ${e.m}`;
+    panel.appendChild(div);
+  });
+  panel.scrollTop = panel.scrollHeight;
+}
+
+// ══════════════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════════════
+function showStep(idx) {
+  if (idx < 0 || idx >= STEPS.length) return;
+  current = idx;
+  const step = STEPS[idx];
+
+  // UI
+  const content = document.getElementById('uiContent');
+  content.innerHTML = step.ui();
+  content.scrollTop = 0;
+
+  // Architecture
+  highlightNodes(step.nodes);
+
+  // Logs
+  addLogs(step.logs);
+
+  // Steps bar
+  updateStepsBar();
+
+  // Header label
+  document.getElementById('stepLabel').textContent =
+    `Step ${idx + 1} / ${STEPS.length} — ${step.label}`;
+}
+
+function jumpTo(idx) {
+  stopRun();
+  // replay logs from beginning up to idx
+  document.getElementById('logPanel').innerHTML = '<div class="log-hdr">Agent Activity Log</div>';
+  for (let i = 0; i <= idx; i++) showStep(i);
+}
+
+function nextStep() {
+  if (current < STEPS.length - 1) showStep(current + 1);
+  else stopRun();
+}
+
+function prevStep() {
+  stopRun();
+  if (current > 0) {
+    document.getElementById('logPanel').innerHTML = '<div class="log-hdr">Agent Activity Log</div>';
+    for (let i = 0; i < current - 1; i++) showStep(i);
+    showStep(current - 1);
+  }
+}
+
+function stopRun() {
+  running = false;
+  if (timer) { clearTimeout(timer); timer = null; }
+  const btn = document.getElementById('runBtn');
+  btn.textContent = current >= 0 ? '▶ Continue' : '▶ Run Demo';
+  btn.classList.remove('paused');
+}
+
+function toggleRun() {
+  if (running) {
+    stopRun();
+    return;
+  }
+  running = true;
+  document.getElementById('runBtn').textContent = '⏸ Pause';
+  document.getElementById('runBtn').classList.add('paused');
+
+  const DELAY = 2800;
+  function advance() {
+    if (!running) return;
+    if (current < STEPS.length - 1) {
+      showStep(current + 1);
+      timer = setTimeout(advance, DELAY);
+    } else {
+      stopRun();
+    }
+  }
+  advance();
+}
+
+function resetDemo() {
+  stopRun();
+  current = -1;
+  highlightNodes(null);
+  document.getElementById('uiContent').innerHTML = `
+    <div class="placeholder">
+      <div class="placeholder-icon">▶</div>
+      <div class="placeholder-title">Click "Run Demo" to begin</div>
+      <div class="placeholder-sub">Scenario: AOG spare parts request from Lufthansa Technik</div>
+    </div>`;
+  document.getElementById('logPanel').innerHTML = '<div class="log-hdr">Agent Activity Log</div>';
+  document.getElementById('stepLabel').textContent = 'Ready to run';
+  document.getElementById('runBtn').textContent = '▶ Run Demo';
+  document.getElementById('runBtn').classList.remove('paused');
+  updateStepsBar();
+}
+
+// ══════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════
+buildStepsBar();
+updateStepsBar();
+</script>
 </body>
 </html>
